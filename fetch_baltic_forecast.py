@@ -11,9 +11,9 @@ os.makedirs(base_output_directory, exist_ok=True)
 today = datetime.utcnow()
 date_string = today.strftime("%Y%m%d")
 start_date = (today - timedelta(days=2)).strftime("%Y-%m-%dT00:00:00")
-end_date = (today + timedelta(days=5)).strftime("%Y-%m-%dT00:00:00")
+end_date = (today + timedelta(days=5)).strftime("%Y-%m-%dT23:59:59")
 start_date_7_10 = (today + timedelta(days=6)).strftime("%Y-%m-%dT00:00:00")
-end_date_7_10 = (today + timedelta(days=9)).strftime("%Y-%m-%dT00:00:00")
+end_date_7_10 = (today + timedelta(days=9)).strftime("%Y-%m-%dT23:59:59")
 
 # Physics 3D
 cm.subset(
@@ -24,7 +24,7 @@ cm.subset(
     force_download=True,
     output_directory=f"{base_output_directory}/bal_phy",
     output_filename=f"ana_3d_{date_string}",
-    file_format="zarr",
+    file_format="netcdf",
 )
 
 # Physics 2D
@@ -36,7 +36,7 @@ cm.subset(
     force_download=True,
     output_directory=f"{base_output_directory}/bal_phy",
     output_filename=f"ana_2d_{date_string}",
-    file_format="zarr",
+    file_format="netcdf",
 )
 
 # Physics 3D 7-10 Days
@@ -48,7 +48,7 @@ cm.subset(
     force_download=True,
     output_directory=f"{base_output_directory}/bal_phy",
     output_filename=f"ana_7-10days_3d_{date_string}",
-    file_format="zarr",
+    file_format="netcdf",
 )
 
 # Physics 2D 7-10 Days
@@ -60,7 +60,7 @@ cm.subset(
     force_download=True,
     output_directory=f"{base_output_directory}/bal_phy",
     output_filename=f"ana_7-10days_2d_{date_string}",
-    file_format="zarr",
+    file_format="netcdf",
 )
 
 # SLA
@@ -72,7 +72,7 @@ cm.subset(
     force_download=True,
     output_directory=f"{base_output_directory}/bal_phy",
     output_filename=f"ana_sla_{date_string}",
-    file_format="zarr",
+    file_format="netcdf",
 )
 
 # SLA 7-10 Days
@@ -84,7 +84,7 @@ cm.subset(
     force_download=True,
     output_directory=f"{base_output_directory}/bal_phy",
     output_filename=f"ana_7-10days_sla_{date_string}",
-    file_format="zarr",
+    file_format="netcdf",
 )
 
 # Biogeochemistry 3D
@@ -96,7 +96,7 @@ cm.subset(
     force_download=True,
     output_directory=f"{base_output_directory}/bal_bgc",
     output_filename=f"ana_3d_{date_string}",
-    file_format="zarr",
+    file_format="netcdf",
 )
 
 # Biogeochemistry 7-10 Days
@@ -108,7 +108,7 @@ cm.subset(
     force_download=True,
     output_directory=f"{base_output_directory}/bal_bgc",
     output_filename=f"ana_7-10days_3d_{date_string}",
-    file_format="zarr",
+    file_format="netcdf",
 )
 
 # Hourly nppv
@@ -120,7 +120,7 @@ cm.subset(
     force_download=True,
     output_directory=f"{base_output_directory}/bal_bgc",
     output_filename=f"ana_nppv_{date_string}",
-    file_format="zarr",
+    file_format="netcdf",
 )
 
 # Hourly nppv 7-10 Days
@@ -132,7 +132,7 @@ cm.subset(
     force_download=True,
     output_directory=f"{base_output_directory}/bal_bgc",
     output_filename=f"ana_7-10days_nppv_{date_string}",
-    file_format="zarr",
+    file_format="netcdf",
 )
 
 # Waves
@@ -144,7 +144,7 @@ cm.subset(
     force_download=True,
     output_directory=f"{base_output_directory}/bal_wav",
     output_filename=f"ana_2d_{date_string}",
-    file_format="zarr",
+    file_format="netcdf",
 )
 
 # Waves 7-10 Days
@@ -156,5 +156,5 @@ cm.subset(
     force_download=True,
     output_directory=f"{base_output_directory}/bal_wav",
     output_filename=f"ana_7-10days_2d_{date_string}",
-    file_format="zarr",
+    file_format="netcdf",
 )

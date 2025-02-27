@@ -16,8 +16,8 @@ LEVELS = [1000, 925, 850, 700, 600, 500, 400, 300, 250, 200, 150, 100, 50]
 
 # Define date range
 now = client.latest()
-start_date = now - datetime.timedelta(days=3)
-end_date = now - datetime.timedelta(days=1)
+start_date = now - datetime.timedelta(days=2)
+end_date = now
 print(f"Downloading data from {start_date.strftime('%Y-%m-%d-%H')} to {end_date.strftime('%Y-%m-%d-%H')}")
 
 # Retrieval function
