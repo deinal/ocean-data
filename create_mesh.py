@@ -220,9 +220,9 @@ def main():
     static_store = os.path.join(static_dir_path, "bathymetry.zarr")
     ds_static    = xr.open_zarr(static_store)
 
-    mask_da = ds_static["mask"].isel(depth=0)
+    ds_mask = ds_static["mask"].isel(depth=0)
     
-    sea_mask = mask_da.values              # shape (ny, nx)
+    sea_mask = ds_mask.values              # shape (ny, nx)
     land_mask = sea_mask == 0              # also (ny, nx)
 
     # grid‐index coords

@@ -2,34 +2,33 @@
 import os
 import calendar
 import pandas as pd
-from datetime import date
 import copernicusmarine as cm
 
 # === CONFIG ===
-BASE_DIR = "./reanalysis"
+BASE_DIR = "data/baltic/raw/reanalysis"
 DATASETS = [
     {
-        "subdir":   "bal_phy",
-        "dataset_id":"cmems_mod_bal_phy_my_P1D-m",
-        "variables":["mlotst","siconc","sithick","sla","so","thetao","uo","vo"],
-        "hourly":   False,
+        "subdir": "bal_phy",
+        "dataset_id": "cmems_mod_bal_phy_my_P1D-m",
+        "variables": ["mlotst", "siconc", "sithick", "sla", "so", "thetao", "uo", "vo"],
+        "hourly": False,
     },
     {
-        "subdir":   "bal_bgc",
-        "dataset_id":"cmems_mod_bal_bgc_my_P1D-m",
-        "variables":["chl","nh4","no3","nppv","o2","ph","po4","spco2","zsd"],
-        "hourly":   False,
+        "subdir": "bal_bgc",
+        "dataset_id": "cmems_mod_bal_bgc_my_P1D-m",
+        "variables": ["chl", "nh4", "no3", "nppv", "o2", "ph", "po4", "spco2", "zsd"],
+        "hourly": False,
     },
     {
-        "subdir":   "bal_wav",
-        "dataset_id":"cmems_mod_bal_wav_my_PT1H-i",
-        "variables":["VHM0","VMDR"],
-        "hourly":   True,
+        "subdir": "bal_wav",
+        "dataset_id": "cmems_mod_bal_wav_my_PT1H-i",
+        "variables": ["VHM0", "VMDR", "VTM10"],
+        "hourly": True,
     },
 ]
 
-START_YEAR = 1993
-END_YEAR   = 2023
+START_YEAR = 2000
+END_YEAR = 2002
 
 # Ensure output dirs
 for ds_cfg in DATASETS:
@@ -80,6 +79,12 @@ for year in range(START_YEAR, END_YEAR + 1):
 
                 # re-chunk so each dim is one chunk
                 daily = daily.chunk(chunk_map)
+
+                # ignore extra river
+                daily = daily.where((daily.longitude > 10) | (daily.latitude > 54))
+
+                # crop to southern edge
+                daily = daily.sel(latitude=slice(53.6, None))
 
                 # write it out
                 daily.to_zarr(store, mode="w", consolidated=True)
