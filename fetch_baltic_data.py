@@ -120,5 +120,3 @@ for ds_cfg in DATASETS:
             ds.close()
 
     print(f"Done {store}.zarr\n")
-
-print("✅ All done!")

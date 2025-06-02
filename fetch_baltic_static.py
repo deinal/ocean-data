@@ -12,7 +12,8 @@ ds = cm.open_dataset(
     dataset_id    = "cmems_mod_bal_phy_anfc_static",
     dataset_part  = "bathy",
     variables     = ["deptho", "mask"],
-)
+    maximum_depth = 204,
+).isel(depth=slice(None, None, 3))
 
 # Discard extra river
 keep = (ds.longitude > 10) | (ds.latitude > 54)

@@ -4,6 +4,8 @@ import numpy as np
 from datetime import date
 
 # ──────────────── USER PARAMETERS ────────────────
+STEP = 5
+
 raw_dir  = "data/baltic/raw"
 prep_dir = "data/baltic/prep"
 os.makedirs(prep_dir, exist_ok=True)
@@ -14,19 +16,15 @@ target_lon   = static_grid.longitude
 surface_mask = static_grid.mask.isel(depth=0).astype(bool)
 
 # ──────────────── REUSEABLE PROCESSING FUNCS ────────────────
-def interpolate_to_grid(ds):
-    return ds.interp(latitude=target_lat, longitude=target_lon, method="linear")
-
-def get_depth_mask(ds, max_depth=150, step=5):
-    if "depth" not in ds.coords:
-        return None
-    depths = ds.depth.values
-    mask   = depths <= max_depth
-    return depths[mask][::step]
+def process_era5(ds):
+    ds = ds.interp(latitude=target_lat, longitude=target_lon, method="linear")
+    return ds.resample(time="1D").mean()
 
 def process_3d_subset(ds):
-    sel = get_depth_mask(ds)
-    return ds.sel(depth=sel) if sel is not None else ds
+    if "depth" not in ds.coords:
+        return ds
+    else:
+        return ds.isel(depth=slice(None, None, STEP))
 
 def process_wave(ds):
     # Match wave dataset to the surface_mask grid (has 1 extra pixel in lat and lon)
@@ -126,41 +124,83 @@ def prep_zarr(name,
 # reanalysis
 prep_zarr("era5",
           start_date=date(2000, 1, 1),
-          end_date=date(2000, 1, 22),
-          custom_proc=interpolate_to_grid)
+          end_date=date(2000, 1, 30),
+          custom_proc=process_era5)
 
 prep_zarr("bal_phy_rea",
           start_date=date(2000, 1, 1),
-          end_date=date(2000, 1, 22),
+          end_date=date(2000, 1, 30),
           custom_proc=process_3d_subset)
 
 prep_zarr("bal_bgc_rea",
           start_date=date(2000, 1, 1),
-          end_date=date(2000, 1, 22),
+          end_date=date(2000, 1, 30),
           include_vars=["chl","o2","zsd"],
           custom_proc= process_3d_subset)
 
 prep_zarr("bal_wav_rea",
           start_date=date(2000, 1, 1),
-          end_date=date(2000, 1, 22),
+          end_date=date(2000, 1, 30),
           custom_proc=process_wave)
 
 
 # analysis
 prep_zarr("bal_phy_ana",
           start_date=date(2023, 1, 1),
-          end_date=date(2023, 1, 22),
+          end_date=date(2023, 1, 30),
           custom_proc=process_3d_subset,
           merge_sla=True)
 
 prep_zarr("bal_bgc_ana",
           start_date=date(2023, 1, 1),
-          end_date=date(2023, 1, 22),
+          end_date=date(2023, 1, 30),
           include_vars=["chl","o2","zsd"],
           custom_proc=process_3d_subset)
 
 prep_zarr("bal_wav_ana",
           start_date=date(2023, 1, 1),
-          end_date=date(2023, 1, 22),
+          end_date=date(2023, 1, 30),
           custom_proc=process_wave)
 
+
+# Create feature mask
+variable_depth = {
+    "mlotst": False,
+    "siconc": False,
+    "sithick": False,
+    "sla": False,
+    "mwp": False,
+    "swh": False,
+    "uw": False,
+    "vw": False,
+    "zsd": False,
+    "so": True,
+    "thetao": True,
+    "uo": True,
+    "vo": True,
+    "chl": True,
+    "o2": True,
+}
+
+# Selected depth levels
+mask_selection = static_grid["mask"].isel(depth=slice(None, None, STEP))
+
+# Surface mask
+surface_mask = static_grid["mask"].isel(depth=0)
+
+# Build output dataset
+feature_mask_dict = {}
+
+for var, has_depth in variable_depth.items():
+    if has_depth:
+        feature_mask_dict[var] = mask_selection.copy(deep=False)
+    else:
+        feature_mask_dict[var] = surface_mask.copy(deep=False)
+
+# Combine as Dataset
+feature_mask_ds = xr.Dataset(data_vars=feature_mask_dict)
+
+# Save to Zarr
+feature_mask_ds = feature_mask_ds.chunk({"depth": -1, "latitude": -1, "longitude": -1})
+feature_mask_ds.to_zarr("data/baltic/prep/mask.zarr", mode="w")
+print(feature_mask_ds)
