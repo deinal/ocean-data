@@ -4,10 +4,11 @@ import numpy as np
 from datetime import date
 
 # ──────────────── USER PARAMETERS ────────────────
-STEP = 5
+MAX_DEPTH = 104
+STEP = 1
 
 raw_dir  = "data/baltic/raw"
-prep_dir = "data/baltic/prep"
+prep_dir = "../baltic-sea-forecasting/data/prep"
 os.makedirs(prep_dir, exist_ok=True)
 
 static_grid = xr.open_zarr("data/baltic/static/bathymetry.zarr")
@@ -24,7 +25,7 @@ def process_3d_subset(ds):
     if "depth" not in ds.coords:
         return ds
     else:
-        return ds.isel(depth=slice(None, None, STEP))
+        return ds.sel(depth=ds.depth[ds.depth <= MAX_DEPTH]).isel(depth=slice(None, None, STEP))
 
 def process_wave(ds):
     # Match wave dataset to the surface_mask grid (has 1 extra pixel in lat and lon)
@@ -115,32 +116,43 @@ def prep_zarr(name,
             "latitude": ds.sizes["latitude"],
             "longitude": ds.sizes["longitude"],
         })
+    
+    encoding = {}
+    for var in ds.data_vars:
+        dims = ds[var].dims
+        chunk_sizes = []
+        for d in dims:
+            if d == "time":
+                chunk_sizes.append(30)
+            else:
+                chunk_sizes.append(ds.sizes[d])
+        encoding[var] = {"chunks": tuple(chunk_sizes)}
 
     # write out
-    ds.to_zarr(dst, mode="w")
+    ds.to_zarr(dst, mode="w", encoding=encoding)
     print(f"Wrote {dst}")
 
 
 # reanalysis
 prep_zarr("era5",
           start_date=date(2000, 1, 1),
-          end_date=date(2000, 1, 30),
+          end_date=date(2020, 12, 31),
           custom_proc=process_era5)
 
 prep_zarr("bal_phy_rea",
           start_date=date(2000, 1, 1),
-          end_date=date(2000, 1, 30),
+          end_date=date(2020, 12, 31),
           custom_proc=process_3d_subset)
 
 prep_zarr("bal_bgc_rea",
           start_date=date(2000, 1, 1),
-          end_date=date(2000, 1, 30),
+          end_date=date(2020, 12, 31),
           include_vars=["chl","o2","zsd"],
-          custom_proc= process_3d_subset)
+          custom_proc=process_3d_subset)
 
 prep_zarr("bal_wav_rea",
           start_date=date(2000, 1, 1),
-          end_date=date(2000, 1, 30),
+          end_date=date(2020, 12, 31),
           custom_proc=process_wave)
 
 
@@ -183,7 +195,7 @@ variable_depth = {
 }
 
 # Selected depth levels
-mask_selection = static_grid["mask"].isel(depth=slice(None, None, STEP))
+mask_selection = static_grid["mask"].sel(depth=static_grid.depth[static_grid.depth <= MAX_DEPTH]).isel(depth=slice(None, None, STEP))
 
 # Surface mask
 surface_mask = static_grid["mask"].isel(depth=0)
@@ -202,5 +214,11 @@ feature_mask_ds = xr.Dataset(data_vars=feature_mask_dict)
 
 # Save to Zarr
 feature_mask_ds = feature_mask_ds.chunk({"depth": -1, "latitude": -1, "longitude": -1})
-feature_mask_ds.to_zarr("data/baltic/prep/mask.zarr", mode="w")
+feature_mask_ds.to_zarr(os.path.join(prep_dir, "mask.zarr"), mode="w")
 print(feature_mask_ds)
+
+# Store static variables
+static_ds = static_grid.sel(depth=static_grid.depth[static_grid.depth <= MAX_DEPTH]).isel(depth=slice(None, None, STEP))
+static_ds = static_ds.chunk({"depth": -1, "latitude": -1, "longitude": -1})
+static_ds.to_zarr(os.path.join(prep_dir, "static.zarr"), mode="w")
+print(static_ds)
