@@ -3,3 +3,4 @@ ecmwf_init
 forecasts
 *.zarr
 data
+slurm

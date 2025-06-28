@@ -1,22 +1,38 @@
 #!/usr/bin/env python3
-"""
-Regrid CMEMS ocean data from 1/12° to 3/2° resolution
-with resumable Zarr writing and depth-level chunking.
-"""
 import numpy as np
 import pandas as pd
 import xarray as xr
 import copernicusmarine as cm
 import xarray_regrid
 import os
+import argparse
 
-zarr_store = "cmems_phy_19930101_20250501.zarr"
+
+parser = argparse.ArgumentParser(
+    description="Fetch & regrid CMEMS global static data into a Zarr store"
+)
+parser.add_argument(
+    "--start", "-s",
+    required=True,
+    help="Start date in YYYY-MM-DD format"
+)
+parser.add_argument(
+    "--end", "-e",
+    required=True,
+    help="End date in YYYY-MM-DD format"
+)
+args = parser.parse_args()
+
+start_date = pd.to_datetime(args.start).strftime("%Y-%m-%d")
+end_date = pd.to_datetime(args.end).strftime("%Y-%m-%d")
+
+zarr_store = f"cmems_phy_{start_date.replace('-','')}_{end_date.replace('-','')}.zarr"
 
 # Select every 5th depth level
 depth_slice = slice(None, None, 5)
 
 # Time range from July 1, 2021
-time_index = pd.date_range("1993-01-01", "2025-05-01", freq="D")
+time_index = pd.date_range(start_date, end_date, freq="D")
 
 # Target grid
 lat_target = np.arange(90.0, -91.0, -1.5)
@@ -97,37 +113,13 @@ def fetch_and_regrid(date):
     return ds_regridded.transpose("time", "depth", "latitude", "longitude")
 
 
-def truncate_last_time_step():
-    """Remove the last time step from the Zarr store."""
-    try:
-        ds = xr.open_zarr(zarr_store)
-        if ds.dims["time"] < 2:
-            print("Only one time step, removing store.", flush=True)
-            os.system(f"rm -r {zarr_store}")
-            return None
-        truncated = ds.isel(time=slice(None, -1))
-        truncated.to_zarr(zarr_store, mode="w")
-        print(f"Truncated last time step: {ds.time.values[-1]}", flush=True)
-        return pd.to_datetime(truncated.time.values[-1])
-    except Exception as e:
-        print(f"Failed to truncate Zarr: {e}", flush=True)
-        return None
-
-
 def main():
-    if not os.path.exists(zarr_store):
-        start_idx = 0
-        print("Initializing new Zarr store...", flush=True)
-        ds_first = fetch_and_regrid(time_index[0])
-        ds_first.to_zarr(zarr_store, mode="w")
-        print(f"Initialized {zarr_store} with {time_index[0].date()}", flush=True)
-        start_idx = 1
-    else:
-        last_written_time = truncate_last_time_step()
-        if last_written_time is None:
-            start_idx = 0
-        else:
-            start_idx = time_index.get_loc(last_written_time)
+    start_idx = 0
+    print("Initializing new Zarr store...", flush=True)
+    ds_first = fetch_and_regrid(time_index[0])
+    ds_first.to_zarr(zarr_store, mode="w")
+    print(f"Initialized {zarr_store} with {time_index[0].date()}", flush=True)
+    start_idx = 1
 
     for dt in time_index[start_idx:]:
         try:
