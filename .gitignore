@@ -4,3 +4,7 @@ forecasts
 *.zarr
 data
 slurm
+pdm.lock
+.pdm-python
+logs
+plots

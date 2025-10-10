@@ -1,5 +1,29 @@
 # ocean-data
 
+## Installation
+
+```
+pdm venv create --with-pip
+pdm install
+```
+
+## Fetch Baltic data
+
+```
+python fetch_baltic_static.py
+python fetch_baltic_data.py --start-year 2022 --end-year 2023
+```
+
+```
+python fetch_boundary_static.py
+python fetch_boundary_data.py --start-year 2022 --end-year 2023
+
+For ERA5 static is loaded after data
+```
+python fetch_era5_data.py --start-year 2022 --end-year 2023
+python fetch_era5_static.py
+```
+
 Daily cronjob
 ```
 0 17 * * * /appl/soft/geo/geoconda/3.10.9_20231117/bin/python /scratch/project_2004522/dholmber/ocean-data/fetch_weather_states.py >> /scratch/project_2004522/dholmber/ocean-data/weather.log 2>&1
