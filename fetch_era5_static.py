@@ -16,11 +16,14 @@ parser.add_argument(
     default="/monolith/global_data/ml_datasets/baltic_sea/data/prep",
     help="Base output directory (default: %(default)s)"
 )
+parser.add_argument(
+    "--dist-threshold-km",
+    type=float,
+    default=25.0,
+    help="Distance (km) from Baltic Sea surface points to include atmospheric points."
+)
 args = parser.parse_args()
 os.makedirs(args.base_dir, exist_ok=True)
-
-# Distance in km from sea to include atmospheric data points
-DIST_THRESHOLD_KM = 200.0
 
 # Load input datasets
 era5_ds = xr.open_dataset(os.path.join(args.base_dir, "era5_data.zarr"))
@@ -89,7 +92,7 @@ mask_era5 = np.zeros_like(era5_x, dtype=np.uint8)
 # Compute min distance from each ERA5 point to any Baltic point
 for xi, yi in zip(baltic_x, baltic_y):
     dist2 = (era5_x - xi) ** 2 + (era5_y - yi) ** 2
-    mask_era5[dist2 <= (DIST_THRESHOLD_KM * 1000.0) ** 2] = 1
+    mask_era5[dist2 <= (args.dist_threshold_km * 1000.0) ** 2] = 1
 
 mask_da = xr.DataArray(
     mask_era5,
@@ -101,6 +104,10 @@ mask_da.attrs["description"] = "Binary mask"
 
 # Add to regridded dataset
 ds_re["mask"] = mask_da
+
+# sort
+ds_re = ds_re.sortby("latitude")
+ds_re = ds_re.sortby("longitude")
 
 # Save to Zarr
 ds_re.to_zarr(os.path.join(args.base_dir, "era5_static.zarr"), mode="w")

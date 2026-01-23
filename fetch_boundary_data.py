@@ -33,27 +33,39 @@ os.makedirs(args.base_dir, exist_ok=True)
 DATASETS = [
     {
         "dataset_id": "cmems_mod_glo_phy_my_0.083deg_P1D-m",
-        "variables": ["mlotst", "zos", "so", "thetao", "uo", "vo"],
+        "variables": ["zos", "thetao", "so", "uo", "vo"],
         "start_year": 1993,
         "end_year": 2022,
         "type": "daily",
-        "switch_id": "cmems_mod_glo_phy_myint_0.083deg_P1D-m",
-        "switch_year": 2021,
-        "switch_month": 7,
+        "replace_nans": True,
     },
     {
         "dataset_id": "cmems_mod_glo_phy_anfc_0.083deg_P1D-m",
-        "variables": ["mlotst", "zos"],
+        "variables": ["zos"],
         "start_year": 2023,
         "end_year": 2024,
         "type": "daily",
     },
     {
-        "dataset_id": "cmems_mod_glo_phy_anfc_0.083deg_PT1H-m",
-        "variables": ["so", "thetao", "uo", "vo"],
+        "dataset_id": "cmems_mod_glo_phy-thetao_anfc_0.083deg_P1D-m",
+        "variables": ["thetao"],
+        "start_year": 2023,
+        "end_year": 2025,
+        "type": "daily",
+    },
+    {
+        "dataset_id": "cmems_mod_glo_phy-so_anfc_0.083deg_P1D-m",
+        "variables": ["so"],
+        "start_year": 2023,
+        "end_year": 2025,
+        "type": "daily",
+    },
+    {
+        "dataset_id": "cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m",
+        "variables": ["uo", "vo"],
         "start_year": 2023,
         "end_year": 2024,
-        "type": "hourly",
+        "type": "daily",
     },
 ]
 
@@ -85,10 +97,6 @@ def preprocess_ds(ds, ds_type):
     # Mask out extra river pixel (SW corner)
     ds = ds.where(~((ds.longitude > 9) & (ds.latitude < 56)))
 
-    # Daily average for hourly data
-    if ds_type == "hourly":
-        ds = ds.resample(time="1D").mean()
-
     # Assign target grid coordinates
     ds = ds.assign_coords(
         latitude=("latitude", target_lat.values),
@@ -112,6 +120,7 @@ for year in range(args.start_year, args.end_year + 1):
         start_time = f"{year:04d}-{month:02d}-01T00:00:00"
         end_time = f"{year:04d}-{month:02d}-{last_day:02d}T23:59:59"
 
+        vars_to_replace = set()
         for ds_cfg in DATASETS:
             # Skip if this year is outside the dataset's validity
             if year < ds_cfg["start_year"] or year > ds_cfg["end_year"]:
@@ -119,13 +128,10 @@ for year in range(args.start_year, args.end_year + 1):
 
             dataset_id = ds_cfg["dataset_id"]
             ds_type = ds_cfg.get("type", "daily")
-
-            # Switch dataset_id to reanalysis interim if needed
-            if "switch_id" in ds_cfg:
-                if (year > ds_cfg["switch_year"]) or (
-                    year == ds_cfg["switch_year"] and month >= ds_cfg["switch_month"]
-                ):
-                    dataset_id = ds_cfg["switch_id"]
+            
+            # Track variables that need NaN replacement
+            if ds_cfg.get("replace_nans", False):
+                vars_to_replace.update(ds_cfg["variables"])
 
             print(f"[{year}-{month:02d}] fetching {dataset_id} ({ds_type})…", flush=True)
 
@@ -145,5 +151,12 @@ for year in range(args.start_year, args.end_year + 1):
             monthly_datasets.append(ds)
 
         merged = xr.merge(monthly_datasets)
+        
+        # Replace NaNs inside boundary mask with 0 (concerns reanalysis with slightly different grid)
+        for var_name in vars_to_replace:
+            if var_name in merged.data_vars:
+                nan_in_mask = np.isnan(merged[var_name]) & (ds_boundary[var_name] == 1)
+                merged[var_name] = merged[var_name].where(~nan_in_mask, 0.0)
+        
         to_zarr_append(merged, out_store)
         print(f"→ Appended {merged.sizes['time']} steps for {year}-{month:02d}\n")

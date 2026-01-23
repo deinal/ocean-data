@@ -111,6 +111,10 @@ for date in months_to_download:
     ds = ds.rename({"valid_time": "time"})
     ds = ds.drop_vars([v for v in ("number", "expver") if v in ds])
 
+    # sort
+    ds = ds.sortby("latitude")
+    ds = ds.sortby("longitude")
+
     # convert to daily variables with *_00, *_06, *_12, *_18
     ds_daily = convert_to_6h_variables(ds)
 
