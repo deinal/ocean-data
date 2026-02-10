@@ -68,7 +68,7 @@ ds_bathy = cm.open_dataset(
     dataset_part="bathy",
     variables=["deptho"],
     minimum_longitude=5,
-    maximum_longitude=10,
+    maximum_longitude=9,
     minimum_latitude=55,
     maximum_latitude=60,
 )
@@ -78,7 +78,7 @@ ds_mdt = cm.open_dataset(
     dataset_part="mdt",
     variables=["mdt"],
     minimum_longitude=5,
-    maximum_longitude=10,
+    maximum_longitude=9,
     minimum_latitude=55,
     maximum_latitude=60,
 )
@@ -116,7 +116,7 @@ ds_mask = cm.open_dataset(
     dataset_part="bathy",
     variables=["mask"],
     minimum_longitude=5,
-    maximum_longitude=10,
+    maximum_longitude=9,
     minimum_latitude=55,
     maximum_latitude=60,
     maximum_depth=110,

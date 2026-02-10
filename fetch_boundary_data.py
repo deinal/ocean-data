@@ -18,13 +18,13 @@ parser.add_argument(
 parser.add_argument(
     "--start-year",
     type=int,
-    default=2022,
+    default=2010,
     help="Start year (default: %(default)s)"
 )
 parser.add_argument(
     "--end-year",
     type=int,
-    default=2023,
+    default=2013,
     help="End year (default: %(default)s)"
 )
 args = parser.parse_args()
@@ -142,7 +142,7 @@ for year in range(args.start_year, args.end_year + 1):
                 end_datetime=end_time,
                 maximum_depth=110,
                 minimum_longitude=5,
-                maximum_longitude=10,
+                maximum_longitude=9,
                 minimum_latitude=55,
                 maximum_latitude=60,
             )

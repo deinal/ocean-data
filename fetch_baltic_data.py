@@ -19,13 +19,13 @@ parser.add_argument(
 parser.add_argument(
     "--start-year",
     type=int,
-    default=2022,
+    default=2010,
     help="Start year (default: %(default)s)"
 )
 parser.add_argument(
     "--end-year",
     type=int,
-    default=2023,
+    default=2013,
     help="End year (default: %(default)s)"
 )
 args = parser.parse_args()
