@@ -43,15 +43,17 @@ depth_slice = slice(None, None, 5)
 # Time range from July 1, 2021
 time_index = pd.date_range(start_date, end_date, freq="D")
 
-# Target grid
-lat_target = np.arange(90.0, -91.0, -1.5)
-lon_target = np.arange(0.0, 360.0, 1.5)
-
-# Target grid dataset
+# Target grid: 1° spacing, lon -180..180, lat -80..90
+lat_target = np.arange(-80.0, 91.0, 1.0)
+lon_target = np.arange(-180.0, 180.0, 1.0)
 ds_target_grid = xr.Dataset(coords={
-    "latitude":  ("latitude",  lat_target),
+    "latitude": ("latitude", lat_target),
     "longitude": ("longitude", lon_target),
 })
+
+# Ocean mask
+mask_path = os.path.join(args.base_dir, "ocean_mask.zarr")
+ocean_mask = xr.open_zarr(mask_path)
 
 
 def fetch_and_regrid(date):
@@ -104,11 +106,15 @@ def fetch_and_regrid(date):
 
         ds = xr.merge([ds1, ds2, ds3, ds4])
 
-    ds_regridded = ds.regrid.conservative(
-        ds_target_grid,
-        latitude_coord="latitude",
-        skipna=True,
-    )
+    ds_regridded = ds.regrid.linear(ds_target_grid)
+
+    # If a value is NaN inside the ocean mask, replace it with 0.0
+    for var_name in ds_regridded.data_vars:
+        mask_da = ocean_mask[var_name]
+        if "depth" in mask_da.dims and "depth" in ds_regridded[var_name].dims:
+            mask_da = mask_da.reindex({"depth": ds_regridded.depth}, method="nearest")
+        nan_in_sea = ds_regridded[var_name].isnull() & (mask_da == 1)
+        ds_regridded[var_name] = ds_regridded[var_name].where(~nan_in_sea, 0.0)
 
     # Build chunk map with full dimension lengths
     chunk_map = {dim: size for dim, size in ds_regridded.sizes.items()}

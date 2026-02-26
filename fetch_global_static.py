@@ -19,32 +19,27 @@ os.makedirs(args.base_dir, exist_ok=True)
 # Select every 5th depth level
 depth_slice = slice(None, None, 5)
 
-# Target 1.5° global grid
-lat_target = np.arange(90.0, -91.0, -1.5)
-lon_target = np.arange(0.0, 360.0, 1.5)
+# Target grid: 1° spacing, lon -180..180, lat -80..90
+lat_target = np.arange(-80.0, 91.0, 1.0)
+lon_target = np.arange(-180.0, 180.0, 1.0)
 ds_target_grid = xr.Dataset(coords={
-    "latitude":  ("latitude",  lat_target),
+    "latitude": ("latitude", lat_target),
     "longitude": ("longitude", lon_target),
 })
 
 def regrid_static(ds: xr.Dataset, skipna=True) -> xr.Dataset:
-    """Regrid dataset to target grid. For 'mask', treat 0 as NaN before regridding, then restore."""
+    """Regrid dataset to 1° via bilinear. For 'mask', treat 0 as NaN before regridding, then binarize."""
     if "mask" in ds:
         # Temporarily replace land (0) with NaN
         mask = ds["mask"].where(ds["mask"] != 0)
         ds = ds.copy()
         ds["mask"] = mask
 
-    # Perform conservative regridding
-    ds_regridded = ds.regrid.conservative(
-        ds_target_grid,
-        latitude_coord="latitude",
-        skipna=skipna
-    )
+    ds_regridded = ds.regrid.linear(ds_target_grid)
 
-    # Replace NaNs in regridded mask with 0 to recover binary ocean/land
+    # Binarize regridded mask (bilinear gives fractional values)
     if "mask" in ds_regridded:
-        ds_regridded["mask"] = ds_regridded["mask"].fillna(0).astype(np.int8)
+        ds_regridded["mask"] = (ds_regridded["mask"].fillna(0) > 0.5).astype(np.int8)
 
     # Rechunk
     chunk_map = {dim: size for dim, size in ds_regridded.sizes.items()}
