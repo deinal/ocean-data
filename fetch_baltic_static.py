@@ -5,6 +5,20 @@ import numpy as np
 import xarray as xr
 import copernicusmarine as cm
 import matplotlib.pyplot as plt
+import cartopy.crs as ccrs
+from scipy.spatial import cKDTree
+
+# Earth rotation rate (rad/s); sphere radius (m) for Lambert
+OMEGA = 7.2921159e-5
+R_EARTH = 6371229.0
+
+LAMBERT = ccrs.LambertConformal(
+    central_longitude=20.0,
+    central_latitude=60.0,
+    standard_parallels=(60.0, 60.0),
+    globe=ccrs.Globe(semimajor_axis=R_EARTH, semiminor_axis=R_EARTH),
+)
+SRC_CRS = ccrs.PlateCarree()
 
 
 # Parse command line arguments
@@ -18,30 +32,38 @@ parser.add_argument(
 args = parser.parse_args()
 os.makedirs(args.base_dir, exist_ok=True)
 
+TARGET_DEPTHS = [1, 9, 28, 47, 91]  # m
+
 # Load static data
 ds_bathy = cm.open_dataset(
-    dataset_id="cmems_mod_bal_phy_anfc_static",
+    dataset_id="cmems_mod_bal_phy_my_static",
     dataset_part="bathy",
     variables=["mask"],
-    maximum_depth=104,
-).isel(depth=slice(None, None, 3))
-
-rounded_depths = np.round(ds_bathy.depth.values).astype(int)
-ds_bathy = ds_bathy.assign_coords(depth=rounded_depths)
-print("Selected depth levels:", rounded_depths)
+    maximum_depth=100,
+)
+depths = ds_bathy.depth.values
+depth_indices = sorted(
+    set(np.argmin(np.abs(depths - z)) for z in TARGET_DEPTHS)
+)
+ds_bathy = ds_bathy.isel(depth=depth_indices)
+ds_bathy = ds_bathy.assign_coords(depth=np.round(ds_bathy.depth.values).astype(int))
+print("Selected depth levels:", list(ds_bathy.depth.values))
 
 ds_deptho = cm.open_dataset(
-    dataset_id="cmems_mod_bal_phy_anfc_static",
+    dataset_id="cmems_mod_bal_phy_my_static",
     dataset_part="bathy",
     variables=["deptho"],
 )
+ds_deptho = ds_deptho.assign_coords(
+    longitude=ds_bathy.longitude,
+    latitude=ds_bathy.latitude,
+)
 
 ds_mdt = cm.open_dataset(
-    dataset_id="cmems_mod_bal_phy_anfc_static",
+    dataset_id="cmems_mod_bal_phy_my_static",
     dataset_part="mdt",
     variables=["mdt"],
 )
-
 ds_mdt = ds_mdt.assign_coords(
     longitude=ds_bathy.longitude,
     latitude=ds_bathy.latitude,
@@ -57,6 +79,31 @@ ds["mdt"] = ds["mdt"].where(keep, other=np.nan)
 
 # Crop to southern edge
 ds = ds.sel(latitude=slice(53.6, None))
+
+# Coriolis frequency f = 2*Omega*sin(lat), rad/s
+lat_rad = np.radians(ds.latitude.values)
+lon_rad = np.radians(ds.longitude.values)
+# Broadcast to (nlat, nlon)
+f_2d = 2.0 * OMEGA * np.sin(lat_rad[:, np.newaxis]) * np.ones((lat_rad.size, lon_rad.size))
+ds["coriolis_freq"] = (("latitude", "longitude"), f_2d.astype(np.float32))
+
+# Distance to coast (m) using Lambert projection
+lat = ds.latitude.values
+lon = ds.longitude.values
+lon2d, lat2d = np.meshgrid(lon, lat)
+pts = LAMBERT.transform_points(SRC_CRS, lon2d, lat2d)
+grid_x = pts[:, :, 0]
+grid_y = pts[:, :, 1]
+surface_mask = ds["mask"].isel(depth=0).values
+land = ~surface_mask.astype(bool)
+land_xy = np.column_stack([grid_x[land].ravel(), grid_y[land].ravel()])
+ocean_xy = np.column_stack([grid_x.ravel(), grid_y.ravel()])
+tree = cKDTree(land_xy)
+dist, _ = tree.query(ocean_xy, k=1)
+coast_dist_2d = dist.reshape(grid_x.shape).astype(np.float32)
+# Land points: 0 distance to self
+coast_dist_2d[land] = 0.0
+ds["coast_dist"] = (("latitude", "longitude"), coast_dist_2d)
 
 # Plot static data
 os.makedirs("plots", exist_ok=True)
@@ -75,20 +122,13 @@ plt.close()
 
 # Create feature mask
 variable_depth = {
-    "mlotst": False,
-    "siconc": False,
-    "sithick": False,
-    "sla": False,
-    "mwp": False,
-    "swh": False,
-    "uw": False,
-    "vw": False,
-    "zsd": False,
-    "so": True,
     "thetao": True,
+    "so": True,
     "uo": True,
     "vo": True,
-    "chl": True,
+    "sla": False,
+    "siconc": False,
+    "sithick": False,
 }
 
 # Selected depth levels
@@ -114,8 +154,8 @@ feature_mask_ds = feature_mask_ds.chunk({"depth": -1, "latitude": -1, "longitude
 feature_mask_ds.to_zarr(os.path.join(args.base_dir, "baltic_mask.zarr"), mode="w")
 print("Saved baltic mask")
 
-# Store static variables
-static_ds = ds[["deptho", "mdt"]]
+# Store static variables (deptho, mdt, coriolis_freq, coast_dist)
+static_ds = ds[["deptho", "mdt", "coriolis_freq", "coast_dist"]]
 static_ds = static_ds.chunk({"latitude": -1, "longitude": -1})
 static_ds.to_zarr(os.path.join(args.base_dir, "baltic_static.zarr"), mode="w")
 print("Saved baltic static")
