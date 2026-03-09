@@ -6,8 +6,7 @@ import copernicusmarine as cm
 import matplotlib.pyplot as plt
 from scipy.spatial import cKDTree
 
-# Earth rotation rate (rad/s); radius (m) for haversine
-OMEGA = 7.2921159e-5
+# Earth radius (m) for great-circle distance
 R_EARTH = 6371229.0
 
 parser = argparse.ArgumentParser()
@@ -65,13 +64,20 @@ def fetch_static():
 def main():
     ds_static = fetch_static()
 
-    # Coriolis frequency f = 2*Omega*sin(lat), rad/s
+    # sin/cos lat/lon as static features
     lat_deg = ds_static.latitude.values
-    nlat, nlon = lat_deg.size, ds_static.longitude.size
-    f_2d = np.broadcast_to(
-        2.0 * OMEGA * np.sin(np.radians(lat_deg)).reshape(-1, 1), (nlat, nlon)
-    ).astype(np.float32)
-    ds_static["coriolis_freq"] = (("latitude", "longitude"), f_2d)
+    lon_deg = ds_static.longitude.values
+    nlat, nlon = lat_deg.size, lon_deg.size
+    lat_rad = np.radians(lat_deg)
+    lon_rad = np.radians(lon_deg)
+    sin_lat = (np.sin(lat_rad).reshape(-1, 1) * np.ones((nlat, nlon), dtype=np.float32)).astype(np.float32)
+    cos_lat = (np.cos(lat_rad).reshape(-1, 1) * np.ones((nlat, nlon), dtype=np.float32)).astype(np.float32)
+    sin_lon = (np.sin(lon_rad).reshape(1, -1) * np.ones((nlat, nlon), dtype=np.float32)).astype(np.float32)
+    cos_lon = (np.cos(lon_rad).reshape(1, -1) * np.ones((nlat, nlon), dtype=np.float32)).astype(np.float32)
+    ds_static["sin_lat"] = (("latitude", "longitude"), sin_lat)
+    ds_static["cos_lat"] = (("latitude", "longitude"), cos_lat)
+    ds_static["sin_lon"] = (("latitude", "longitude"), sin_lon)
+    ds_static["cos_lon"] = (("latitude", "longitude"), cos_lon)
 
     # Distance to coast (m): great-circle via cKDTree on unit-sphere 3D (parallel query)
     mask_2d = ds_static["mask"].isel(depth=0).values
@@ -152,8 +158,8 @@ def main():
     print("Static dataset:", flush=True)
     print(ds_static, flush=True)
     
-    # Save static variables (deptho, mdt, coriolis_freq, coast_dist)
-    static_ds = ds_static[["deptho", "mdt", "coriolis_freq", "coast_dist"]]
+    # Save static variables (deptho, mdt, coast_dist, sin_lon, cos_lon, sin_lat, cos_lat)
+    static_ds = ds_static[["deptho", "mdt", "sin_lon", "cos_lon", "sin_lat", "cos_lat", "coast_dist"]]
     static_ds = static_ds.chunk({"latitude": -1, "longitude": -1})
     static_ds.to_zarr(static_out, mode="w")
     print(f"Saved global static to {static_out}", flush=True)

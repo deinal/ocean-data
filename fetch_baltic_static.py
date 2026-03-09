@@ -8,8 +8,7 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 from scipy.spatial import cKDTree
 
-# Earth rotation rate (rad/s); sphere radius (m) for Lambert
-OMEGA = 7.2921159e-5
+# Sphere radius (m) for Lambert
 R_EARTH = 6371229.0
 
 LAMBERT = ccrs.LambertConformal(
@@ -80,20 +79,17 @@ ds["mdt"] = ds["mdt"].where(keep, other=np.nan)
 # Crop to southern edge
 ds = ds.sel(latitude=slice(53.6, None))
 
-# Coriolis frequency f = 2*Omega*sin(lat), rad/s
-lat_rad = np.radians(ds.latitude.values)
-lon_rad = np.radians(ds.longitude.values)
-# Broadcast to (nlat, nlon)
-f_2d = 2.0 * OMEGA * np.sin(lat_rad[:, np.newaxis]) * np.ones((lat_rad.size, lon_rad.size))
-ds["coriolis_freq"] = (("latitude", "longitude"), f_2d.astype(np.float32))
-
-# Distance to coast (m) using Lambert projection
+# Lambert projection: x, y as positional static features (m)
 lat = ds.latitude.values
 lon = ds.longitude.values
 lon2d, lat2d = np.meshgrid(lon, lat)
 pts = LAMBERT.transform_points(SRC_CRS, lon2d, lat2d)
 grid_x = pts[:, :, 0]
 grid_y = pts[:, :, 1]
+ds["x_coord"] = (("latitude", "longitude"), grid_x.astype(np.float32))
+ds["y_coord"] = (("latitude", "longitude"), grid_y.astype(np.float32))
+
+# Distance to coast (m) using Lambert projection
 surface_mask = ds["mask"].isel(depth=0).values
 land = ~surface_mask.astype(bool)
 land_xy = np.column_stack([grid_x[land].ravel(), grid_y[land].ravel()])
@@ -154,8 +150,8 @@ feature_mask_ds = feature_mask_ds.chunk({"depth": -1, "latitude": -1, "longitude
 feature_mask_ds.to_zarr(os.path.join(args.base_dir, "baltic_mask.zarr"), mode="w")
 print("Saved baltic mask")
 
-# Store static variables (deptho, mdt, coriolis_freq, coast_dist)
-static_ds = ds[["deptho", "mdt", "coriolis_freq", "coast_dist"]]
+# Store static variables
+static_ds = ds[["deptho", "mdt", "x_coord", "y_coord", "coast_dist"]]
 static_ds = static_ds.chunk({"latitude": -1, "longitude": -1})
 static_ds.to_zarr(os.path.join(args.base_dir, "baltic_static.zarr"), mode="w")
 print("Saved baltic static")
