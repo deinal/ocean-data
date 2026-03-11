@@ -6,16 +6,17 @@ import argparse
 import numpy as np
 import os
 import xarray as xr
-
+import zarr
+import dask
 from dask.diagnostics import ProgressBar
 from oceanbench.datasets.input import glo12_nowcasts, ifs_forcings
 
 DEFAULT_OUT = "data"
 TARGET_DEPTHS = [0, 47, 92, 222, 318, 541]  # m
 TARGET_VARS = ["thetao", "so", "uo", "vo", "zos", "siconc", "sithick"]
-CHUNK_LAT, CHUNK_LON = 256, 540
 
 parser = argparse.ArgumentParser(description="Fetch OceanBench input datasets.")
+parser.add_argument("--num-workers", type=int, default=4)
 parser.add_argument(
     "--out-dir",
     type=str,
@@ -37,30 +38,42 @@ vars_with_depth = [v for v in ds.data_vars if "depth" in ds[v].dims]
 vars_2d = [v for v in ds.data_vars if "depth" not in ds[v].dims]
 
 depths = ds.depth.values
+print("Available depth levels:", depths, flush=True)
 depth_indices = sorted(set(np.argmin(np.abs(depths - z)) for z in TARGET_DEPTHS))
 ds_depth = ds[vars_with_depth].isel(depth=depth_indices)
+print("Chosen depth levels:", ds_depth.depth.values, flush=True)
+ds_depth = ds_depth.assign_coords(depth=np.round(ds_depth.depth.values).astype(int))
+print("Rounded depth levels:", ds_depth.depth.values, flush=True)
 n_depth = len(depth_indices)
 ds_2d = ds[vars_2d]
 ds_nowcasts = xr.merge([ds_depth, ds_2d])
 
+n_lat = ds_nowcasts.sizes["latitude"]
+n_lon = ds_nowcasts.sizes["longitude"]
+
 # Rechunk
-chunk_dict = {"time": 1, "depth": n_depth, "latitude": CHUNK_LAT, "longitude": CHUNK_LON}
+chunk_dict = {
+    "time": 1,
+    "depth": n_depth,
+    "latitude": n_lat,
+    "longitude": n_lon
+}
 ds_nowcasts = ds_nowcasts.chunk(chunk_dict)
 encoding = {}
 for v in ds_nowcasts.data_vars:
     dims = list(ds_nowcasts[v].dims)
     if "depth" in dims:
-        encoding[v] = {"chunks": (1, n_depth, CHUNK_LAT, CHUNK_LON)}
+        encoding[v] = {"chunks": (1, n_depth, n_lat, n_lon)}
     else:
-        encoding[v] = {"chunks": (1, CHUNK_LAT, CHUNK_LON)}
+        encoding[v] = {"chunks": (1, n_lat, n_lon)}
 
-print("GLO12 nowcasts (depths ~0, 50, 100, 200, 500 m):", flush=True)
+print(f"GLO12 nowcasts (depths {ds_nowcasts.depth.values.tolist()} m):", flush=True)
 print(ds_nowcasts, flush=True)
 print(f"Writing {nowcast_path} ...", flush=True)
 with ProgressBar():
-    ds_nowcasts.to_zarr(nowcast_path, mode="w", encoding=encoding)
+    with dask.config.set(scheduler="threads", num_workers=args.num_workers):
+        ds_nowcasts.to_zarr(nowcast_path, mode="w", encoding=encoding)
 print(f"  -> {nowcast_path}\n")
-
 
 
 # IFS forcings
@@ -74,5 +87,7 @@ for v in ds_forcings.data_vars:
         del a["missing_value"]  # keep _FillValue (nan) only
 print(f"Writing {forcings_path} ...", flush=True)
 with ProgressBar():
-    ds_forcings.to_zarr(forcings_path, mode="w")
+    with dask.config.set(scheduler="threads", num_workers=args.num_workers):
+        ds_forcings.to_zarr(forcings_path, mode="w")
+zarr.consolidate_metadata(forcings_path)
 print(f"  -> {forcings_path}\n")
