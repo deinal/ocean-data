@@ -1,10 +1,10 @@
 __pycachce__/
-ecmwf_init
-forecasts
 *.zarr
 data
 slurm
 pdm.lock
+.python-version
 .pdm-python
+.venv
 logs
 plots

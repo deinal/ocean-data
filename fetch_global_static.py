@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--base-dir",
     type=str,
-    default="/monolith/global_data/ml_datasets/baltic_sea/data/prep",
+    default="data",
     help="Base output directory (default: %(default)s)"
 )
 parser.add_argument(

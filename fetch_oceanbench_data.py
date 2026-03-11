@@ -10,8 +10,8 @@ import xarray as xr
 from dask.diagnostics import ProgressBar
 from oceanbench.datasets.input import glo12_nowcasts, ifs_forcings
 
-DEFAULT_OUT = "/monolith/global_data/ml_datasets/baltic_sea/data/prep"
-TARGET_DEPTHS = [0, 50, 100, 200, 500]  # m
+DEFAULT_OUT = "data"
+TARGET_DEPTHS = [0, 47, 92, 222, 318, 541]  # m
 TARGET_VARS = ["thetao", "so", "uo", "vo", "zos", "siconc", "sithick"]
 CHUNK_LAT, CHUNK_LON = 256, 540
 
@@ -42,9 +42,6 @@ ds_depth = ds[vars_with_depth].isel(depth=depth_indices)
 n_depth = len(depth_indices)
 ds_2d = ds[vars_2d]
 ds_nowcasts = xr.merge([ds_depth, ds_2d])
-
-# Subset tim to slice for testing
-# ds_nowcasts = ds_nowcasts.isel(time=slice(0, 10))
 
 # Rechunk
 chunk_dict = {"time": 1, "depth": n_depth, "latitude": CHUNK_LAT, "longitude": CHUNK_LON}

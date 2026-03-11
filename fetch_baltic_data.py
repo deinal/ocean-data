@@ -13,21 +13,21 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--base-dir",
     type=str,
-    default="/monolith/global_data/ml_datasets/baltic_sea/data/prep",
+    default="data",
     help="Base output directory (default: %(default)s)"
 )
 parser.add_argument(
     "--start",
     "-s",
     type=str,
-    default="2020-01-01",
+    default="1993-01-01",
     help="Start date YYYY-MM-DD (default: %(default)s)"
 )
 parser.add_argument(
     "--end",
     "-e",
     type=str,
-    default="2020-03-31",
+    default="2024-12-31",
     help="End date YYYY-MM-DD (default: %(default)s)"
 )
 args = parser.parse_args()

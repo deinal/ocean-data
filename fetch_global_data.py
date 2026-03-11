@@ -10,80 +10,170 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--base-dir",
     type=str,
-    default="/monolith/global_data/ml_datasets/baltic_sea/data/prep",
-    help="Base output directory (default: %(default)s)"
+    default="data",
+    help="Base output directory (default: %(default)s)",
 )
 parser.add_argument(
-    "--out",
-    "-o",
-    help="Output Zarr store path",
-    default=None,
+    "--start",
+    "-s",
+    default="1993-01-01",
+    help="Start date in YYYY-MM-DD format",
 )
 parser.add_argument(
-    "--start", "-s",
-    default="2020-01-01",
-    help="Start date in YYYY-MM-DD format"
-)
-parser.add_argument(
-    "--end", "-e",
-    default="2020-03-31",
-    help="End date in YYYY-MM-DD format"
+    "--end",
+    "-e",
+    default="2024-12-31",
+    help="End date in YYYY-MM-DD format",
 )
 args = parser.parse_args()
 
 fpath = os.path.join(args.base_dir, "global_data.zarr")
 
-start_date = pd.to_datetime(args.start).strftime("%Y-%m-%d")
-end_date = pd.to_datetime(args.end).strftime("%Y-%m-%d")
+start_date = pd.to_datetime(args.start)
+end_date = pd.to_datetime(args.end)
 
 TARGET_DEPTHS = [0, 47, 92, 222, 318, 541]  # m
+VARS_3D = ["thetao", "so", "uo", "vo"]
+VARS_2D = ["zos", "siconc", "sithick"]
+DATASET_ID = "cmems_mod_glo_phy_my_0.083deg_P1D-m"
 
-time_index = pd.date_range(start_date, end_date, freq="D")
 
-def fetch_day(date):
-    t0 = date.strftime("%Y-%m-%d")
+def month_starts(start: pd.Timestamp, end: pd.Timestamp) -> pd.DatetimeIndex:
+    return pd.date_range(
+        start=start.normalize().replace(day=1),
+        end=end.normalize().replace(day=1),
+        freq="MS",
+    )
 
-    dataset_id = "cmems_mod_glo_phy_my_0.083deg_P1D-m"
-    variables = ["thetao", "so", "uo", "vo", "zos", "siconc", "sithick"]
+
+def month_bounds(month_start: pd.Timestamp, global_start: pd.Timestamp, global_end: pd.Timestamp):
+    month_end = month_start + pd.offsets.MonthEnd(0)
+    t0 = max(month_start, global_start)
+    t1 = min(month_end, global_end)
+    return t0.strftime("%Y-%m-%d"), t1.strftime("%Y-%m-%d")
+
+
+def fetch_2d_month(t0: str, t1: str) -> xr.Dataset:
     ds = cm.open_dataset(
-        dataset_id=dataset_id,
-        variables=variables,
+        dataset_id=DATASET_ID,
+        variables=VARS_2D,
         start_datetime=t0,
-        end_datetime=t0,
-        maximum_depth=550,
+        end_datetime=t1,
     )
-    vars_with_depth = [v for v in ds.data_vars if "depth" in ds[v].dims]
-    vars_2d = [v for v in ds.data_vars if "depth" not in ds[v].dims]
-    depths = ds.depth.values
-    depth_indices = sorted(
-        set(np.argmin(np.abs(depths - z)) for z in TARGET_DEPTHS)
-    )
-    ds = xr.merge([
-        ds[vars_with_depth].isel(depth=depth_indices),
-        ds[vars_2d],
-    ])
-    ds = ds.assign_coords(depth=np.round(ds.depth.values).astype(int))
+    return ds
 
-    chunk_map = {dim: size for dim, size in ds.sizes.items()}
-    ds = ds.chunk(chunk_map)
-    return ds.transpose("time", "depth", "latitude", "longitude")
+
+def fetch_3d_depth_month(t0: str, t1: str, target_depth: int) -> xr.Dataset:
+    zmin = max(0, target_depth - 1)
+    zmax = target_depth + 1
+
+    ds = cm.open_dataset(
+        dataset_id=DATASET_ID,
+        variables=VARS_3D,
+        start_datetime=t0,
+        end_datetime=t1,
+        minimum_depth=zmin,
+        maximum_depth=zmax,
+    )
+
+    if "depth" not in ds.dims:
+        raise ValueError(f"No depth dimension returned for target depth {target_depth} m")
+
+    # We expect exactly one native level inside [z-1, z+1].
+    if ds.sizes["depth"] == 0:
+        raise ValueError(f"No depth returned within [{zmin}, {zmax}] for target depth {target_depth} m")
+
+    if ds.sizes["depth"] > 1:
+        raise ValueError(
+            f"Ambiguous depth selection for target {target_depth} m; "
+            f"native depths in window are {native_depths.tolist()}"
+        )
+
+    # Force exact target depth coordinate in the output dataset
+    ds = ds.assign_coords(depth=[int(target_depth)])
+    return ds
+
+
+def fetch_month(month_start: pd.Timestamp) -> xr.Dataset:
+    t0, t1 = month_bounds(month_start, start_date, end_date)
+    print(f"Fetching month {t0} to {t1}", flush=True)
+
+    ds_2d = fetch_2d_month(t0, t1)
+
+    depth_slices = []
+    for z in TARGET_DEPTHS:
+        print(f"  Fetching 3D vars at target depth {z} m", flush=True)
+        ds_z = fetch_3d_depth_month(t0, t1, z)
+        depth_slices.append(ds_z)
+
+    ds_3d = xr.concat(depth_slices, dim="depth")
+    ds_3d = ds_3d.assign_coords(depth=np.array(TARGET_DEPTHS, dtype=int))
+
+    ds = xr.merge([ds_3d, ds_2d])
+
+    # Standardize dimension order where present
+    ordered = {}
+    for v in ds.data_vars:
+        dims = ds[v].dims
+        if "depth" in dims:
+            ordered[v] = ds[v].transpose("time", "depth", "latitude", "longitude")
+        else:
+            ordered[v] = ds[v].transpose("time", "latitude", "longitude")
+    ds = xr.Dataset(ordered, coords=ds.coords, attrs=ds.attrs)
+
+    # Chunking requested:
+    # 3D vars -> time=1, depth=-1, latitude=-1, longitude=-1
+    # 2D vars -> time=1, latitude=-1, longitude=-1
+    chunked = {}
+    for v in ds.data_vars:
+        if "depth" in ds[v].dims:
+            chunked[v] = ds[v].chunk({
+                "time": 1,
+                "depth": -1,
+                "latitude": -1,
+                "longitude": -1,
+            })
+        else:
+            chunked[v] = ds[v].chunk({
+                "time": 1,
+                "latitude": -1,
+                "longitude": -1,
+            })
+
+    ds = xr.Dataset(chunked, coords=ds.coords, attrs=ds.attrs)
+    return ds
+
+
+def get_encoding(ds: xr.Dataset) -> dict:
+    nd = ds.sizes["depth"]
+    ny = ds.sizes["latitude"]
+    nx = ds.sizes["longitude"]
+    encoding = {}
+
+    for v in VARS_3D:
+        encoding[v] = {"chunks": (1, nd, ny, nx)}
+    for v in VARS_2D:
+        encoding[v] = {"chunks": (1, ny, nx)}
+
+    return encoding
 
 
 def main():
-    start_idx = 0
-    print("Initializing new Zarr store...", flush=True)
-    ds_first = fetch_day(time_index[0])
-    ds_first.to_zarr(fpath, mode="w")
-    print(f"Initialized {fpath} with {time_index[0].date()}", flush=True)
-    start_idx = 1
+    months = month_starts(start_date, end_date)
 
-    for dt in time_index[start_idx:]:
+    print("Initializing new Zarr store...", flush=True)
+    ds_first = fetch_month(months[0])
+    encoding = get_encoding(ds_first)
+    ds_first.to_zarr(fpath, mode="w", encoding=encoding)
+    print(f"Initialized {fpath} with first month {months[0].strftime('%Y-%m')}", flush=True)
+
+    for month in months[1:]:
         try:
-            ds_day = fetch_day(dt)
-            ds_day.to_zarr(fpath, mode="a", append_dim="time")
-            print("Appended", dt.date(), flush=True)
+            ds_month = fetch_month(month)
+            ds_month.to_zarr(fpath, mode="a", append_dim="time")
+            print(f"Appended {month.strftime('%Y-%m')}", flush=True)
         except Exception as e:
-            print(f"Failed on {dt.date()}: {e}", flush=True)
+            print(f"Failed on {month.strftime('%Y-%m')}: {e}", flush=True)
             break
 
     print("Processing complete.", flush=True)
