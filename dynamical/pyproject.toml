@@ -1,7 +1,7 @@
 [project]
 name = "dynamical"
 dynamic = ["version"]
-description = "Fetch ocean data"
+description = "Fetch GFS data"
 authors = [
     { name = "Daniel Holmberg", email = "dholmberg@ucsb.edu" },
 ]
