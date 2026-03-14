@@ -7,7 +7,6 @@ import numpy as np
 import os
 import xarray as xr
 import zarr
-import dask
 from dask.diagnostics import ProgressBar
 from oceanbench.datasets.input import glo12_nowcasts, ifs_forcings
 
@@ -71,23 +70,31 @@ print(f"GLO12 nowcasts (depths {ds_nowcasts.depth.values.tolist()} m):", flush=T
 print(ds_nowcasts, flush=True)
 print(f"Writing {nowcast_path} ...", flush=True)
 with ProgressBar():
-    with dask.config.set(scheduler="threads", num_workers=args.num_workers):
-        ds_nowcasts.to_zarr(nowcast_path, mode="w", encoding=encoding)
+    ds_nowcasts.to_zarr(nowcast_path, mode="w", encoding=encoding)
 print(f"  -> {nowcast_path}\n")
 
 
-# IFS forcings
+# IFS forcings (took >15h to download like this)
+# Problems with data: no mean sea level pressure, pixelated (interp to land areas?), 
+# shortwave radiation dark areas -> time snapshot not daily mean?
 forcings_path = os.path.join(args.out_dir, "ifs_forcings.zarr")
 ds_forcings = ifs_forcings()
 print(ds_forcings, flush=True)
-# Drop conflicting fill/missing attrs so zarr can encode
-for v in ds_forcings.data_vars:
+# Drop conflicting fill/missing attrs and encoding so zarr can encode
+for v in list(ds_forcings.data_vars) + list(ds_forcings.coords):
     a = ds_forcings[v].attrs
     if "_FillValue" in a and "missing_value" in a:
-        del a["missing_value"]  # keep _FillValue (nan) only
+        del a["missing_value"]
+    enc = getattr(ds_forcings[v], "encoding", None)
+    if isinstance(enc, dict) and "missing_value" in enc:
+        del enc["missing_value"]
+# Also clean encoding on underlying Variables (used by encoder)
+for name in ds_forcings.variables:
+    var = ds_forcings.variables[name]
+    if hasattr(var, "encoding") and isinstance(var.encoding, dict) and "missing_value" in var.encoding:
+        del var.encoding["missing_value"]
 print(f"Writing {forcings_path} ...", flush=True)
 with ProgressBar():
-    with dask.config.set(scheduler="threads", num_workers=args.num_workers):
-        ds_forcings.to_zarr(forcings_path, mode="w")
+    ds_forcings.to_zarr(forcings_path, mode="w")
 zarr.consolidate_metadata(forcings_path)
 print(f"  -> {forcings_path}\n")
