@@ -73,24 +73,9 @@ for mask_path, out_path in targets:
         ds_r[var] = ds_r[var].where(mask_2d)
 
     ds_r = ds_r.rename(LEXICON)
-
-    # Fill NaNs inside mask with mean of day before and day after (or single neighbor at boundaries)
-    for var in ds_r.data_vars:
-        nan_inside = ds_r[var].isnull() & mask_2d
-        if not nan_inside.any():
-            continue
-        prev = ds_r[var].shift(time=1)
-        next_ = ds_r[var].shift(time=-1)
-        fill_val = xr.where(
-            prev.notnull() & next_.notnull(),
-            (prev + next_) / 2.0,
-            xr.where(prev.notnull(), prev, next_),
-        )
-        ds_r[var] = xr.where(nan_inside, fill_val, ds_r[var])
-
     ds_r = ds_r.chunk({"time": 1, "latitude": -1, "longitude": -1})
 
-    # Single NaN check after fill (report any remaining inside mask)
+    # Check for NaNs inside mask after regrid (print time and variable)
     for var in ds_r.data_vars:
         nan_inside = (ds_r[var].isnull() & mask_2d).any(dim=["latitude", "longitude"])
         if nan_inside.any():
