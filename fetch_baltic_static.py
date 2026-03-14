@@ -101,6 +101,12 @@ coast_dist_2d = dist.reshape(grid_x.shape).astype(np.float32)
 coast_dist_2d[land] = 0.0
 ds["coast_dist"] = (("latitude", "longitude"), coast_dist_2d)
 
+# Apply surface mask so created variables are NaN over land like the rest
+surface_mask = ds["mask"].isel(depth=0)
+ds["x_coord"] = ds["x_coord"].where(surface_mask)
+ds["y_coord"] = ds["y_coord"].where(surface_mask)
+ds["coast_dist"] = ds["coast_dist"].where(surface_mask)
+
 # Plot static data
 os.makedirs("plots", exist_ok=True)
 
@@ -114,6 +120,18 @@ plt.close()
 
 ds.mdt.plot()
 plt.savefig(os.path.join("plots", "baltic_mdt.png"))
+plt.close()
+
+ds.coast_dist.plot()
+plt.savefig(os.path.join("plots", "baltic_coast_dist.png"))
+plt.close()
+
+ds.x_coord.plot()
+plt.savefig(os.path.join("plots", "baltic_x_coord.png"))
+plt.close()
+
+ds.y_coord.plot()
+plt.savefig(os.path.join("plots", "baltic_y_coord.png"))
 plt.close()
 
 # Create feature mask

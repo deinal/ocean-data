@@ -105,6 +105,11 @@ def main():
     coast_dist_2d.ravel()[ocean] = dist_m
     ds_static["coast_dist"] = (("latitude", "longitude"), coast_dist_2d)
 
+    # Apply surface mask
+    surface_mask = ds_static["mask"].isel(depth=0)
+    for var in ["coast_dist", "sin_lat", "cos_lat", "sin_lon", "cos_lon"]:
+        ds_static[var] = ds_static[var].where(surface_mask)
+
     # Plot static data
     os.makedirs("plots", exist_ok=True)
 
@@ -118,6 +123,26 @@ def main():
 
     ds_static.mdt.plot()
     plt.savefig(os.path.join("plots", "global_mdt.png"))
+    plt.close()
+
+    ds_static.coast_dist.plot()
+    plt.savefig(os.path.join("plots", "global_coast_dist.png"))
+    plt.close()
+
+    ds_static.sin_lat.plot()
+    plt.savefig(os.path.join("plots", "global_sin_lat.png"))
+    plt.close()
+
+    ds_static.cos_lat.plot()
+    plt.savefig(os.path.join("plots", "global_cos_lat.png"))
+    plt.close()
+
+    ds_static.sin_lon.plot()
+    plt.savefig(os.path.join("plots", "global_sin_lon.png"))
+    plt.close()
+
+    ds_static.cos_lon.plot()
+    plt.savefig(os.path.join("plots", "global_cos_lon.png"))
     plt.close()
 
     # Create feature mask for global ocean variables
