@@ -126,3 +126,24 @@ GLO12 forecasts over the Baltic (5–35°E, 50–70°N), interpolated to the Bal
 python fetch_glo12_baltic_forecasts.py                # glo12_baltic_forecasts.zarr
 python interpolate_glo12_baltic_forecasts.py          # glo12_baltic_forecasts_interp.zarr
 ```
+
+## Hugging Face
+
+The Baltic zarrs are published as [deinal/njord-baltic-data](https://huggingface.co/datasets/deinal/njord-baltic-data). They were staged and uploaded with:
+```
+python stage_hf_baltic.py
+python upload_hf_baltic.py
+```
+
+It can be downloaded to a local data directory with:
+```python
+from huggingface_hub import snapshot_download
+
+snapshot_download(
+    repo_id="deinal/njord-baltic-data",
+    repo_type="dataset",
+    local_dir="data"
+)
+```
+
+This will yield a local data folder that can be used with [njord](https://github.com/deinal/njord).
