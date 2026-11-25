@@ -103,29 +103,26 @@ python process_baltic_boundary.py             # baltic_boundary_forecasts.zarr
 30 17 * * * /appl/soft/geo/geoconda/3.10.9_20231117/bin/python /scratch/project_2004522/dholmber/ocean-data/fetch_baltic_forecast.py >> /scratch/project_2004522/dholmber/ocean-data/baltic.log 2>&1
 ```
 
-Process weather states
+## OceanBench evaluation
 
-https://huggingface.co/ecmwf/aifs-single/blob/main/run_AIFS_v0_2_1.ipynb
+Global forecasts from the OceanBench challengers, 2024 weekly inits, leads 1–10 days.
+All are written as `{challenger}_global_forecasts.zarr` on the 1/4° grid with depths `[0, 47, 92, 222, 318, 541]` m.
 
-
-## fetch weatherquest data
-
-fetch an interval as
+GloNet:
 ```
-python fetch_wq_ocean.py --start 1993-01-01 --end 1999-12-31
+python fetch_oceanbench_challengers.py --challenger glonet   # glonet_global_forecasts.zarr
 ```
 
-fetch static
+Wenhai and XiHe: fetch the raw forecasts (depths < 600 m) first, then select or interpolate the target depths and regrid:
 ```
-python fetch_wq_static.py
-```
-
-combine intervals (hardcoded dates here) and replace nans with zeros for ice variables
-```
-python combine_wq_data.py
+python fetch_raw_forecast.py --challenger wenhai      # wenhai_raw_forecasts.zarr
+python process_wenhai_xihe.py --challenger wenhai     # wenhai_global_forecasts.zarr
+python fetch_raw_forecast.py --challenger xihe
+python process_wenhai_xihe.py --challenger xihe
 ```
 
-create zarrs for weekly means (starting at 1=Mon, 2=Tue, etc.)
+GLO12 forecasts over the Baltic (5–35°E, 50–70°N), interpolated to the Baltic grid for comparison with the Baltic model:
 ```
-python create_wq_weekly.py --weekday 1
+python fetch_glo12_baltic_forecasts.py                # glo12_baltic_forecasts.zarr
+python interpolate_glo12_baltic_forecasts.py          # glo12_baltic_forecasts_interp.zarr
 ```
