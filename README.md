@@ -7,6 +7,54 @@ pdm venv create --with-pip
 pdm install
 ```
 
+All scripts write to `data/` by default (`--base-dir` / `--out-dir` to change).
+
+## Global data
+
+### 1. Reanalysis (GLORYS, 1993–2024)
+
+```
+python fetch_global_static.py                 # global_static.zarr, global_mask.zarr
+python fetch_global_data.py --start 1993-01-01 --end 2024-12-31   # global_data.zarr
+python fetch_global_data.py --start 2025-01-01 --end 2025-01-31   # renamed output to global_data_jan_2025.zarr for additional data
+python regrid_global.py --num-workers 100     # global_{data,mask,static}_{1_4,1}.zarr
+```
+
+### 2. Analysis (GLO12 operational, 2023-01 – 2025-01)
+
+```
+python fetch_global_analysis_data.py          # global_analysis_data.zarr
+python fetch_global_analysis_static.py        # global_analysis_static.zarr, global_analysis_mask.zarr
+python fetch_oceanbench_inputs.py             # glo12_nowcasts.zarr (OceanBench, 2024 Tuesdays)
+python regrid_global_analysis.py              # global_analysis_{data,mask,static}_1_4.zarr, glo12_nowcasts_1_4.zarr
+python process_global_analysis.py             # global_analysis_forecasts.zarr (init_time x lead_time -1..10 days)
+```
+
+### 3. Forecast ground truth (2024 weekly inits)
+
+`global_analysis_mondays_2024.zarr` (the 53 Mondays of 2024, taken from the GLO12 analysis).
+```
+python regrid_global_additional.py            # {global_data_jan_2025,glo12_nowcasts,global_analysis_mondays_2024}_{1_4,1}.zarr
+python process_global_data.py                 # global_forecasts_truth.zarr
+```
+
+### 4. Atmospheric forcing
+
+ERA5 (ARCO, hourly → daily). The fetch may be split into several runs (`arco_era5_1.zarr`, `arco_era5_2.zarr`, ...), which `combine_era5.py` merges:
+```
+python fetch_arco_era5.py --start-date 1993-01-01 --end-date 2024-12-31
+python combine_era5.py                        # arco_era5.zarr
+python regrid_era5.py --num-workers 100       # global_era5_{1_4,1}.zarr, global_analysis_era5_1_4.zarr, baltic_era5.zarr
+```
+`regrid_era5.py` also regrids onto `baltic_mask.zarr`, so the Baltic static data must exist first.
+
+IFS 2024 forecasts:
+```
+python process_ifs_2024_data.py               # ifs2024_daily_means.zarr
+python regrid_ifs.py                          # ifs_analysis_forecasts.zarr
+```
+`regrid_ifs.py` has hardcoded `OUT_PATH`/`MASK_PATH`. Swap the commented lines to produce `ifs_forecasts.zarr` on `global_mask_1_4.zarr`.
+
 ## Fetch Baltic data
 
 ```
