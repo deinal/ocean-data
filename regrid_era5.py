@@ -40,6 +40,7 @@ targets = [
     (os.path.join(base_dir, "baltic_mask.zarr"), os.path.join(base_dir, "baltic_era5.zarr")),
     (os.path.join(base_dir, "global_mask_1_4.zarr"), os.path.join(base_dir, "global_era5_1_4.zarr")),
     (os.path.join(base_dir, "global_mask_1.zarr"), os.path.join(base_dir, "global_era5_1.zarr")),
+    (os.path.join(base_dir, "global_analysis_mask_1_4.zarr"), os.path.join(base_dir, "global_analysis_era5_1_4.zarr")),
 ]
 
 # ERA5 daily average

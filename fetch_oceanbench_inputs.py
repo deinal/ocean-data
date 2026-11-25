@@ -77,24 +77,24 @@ print(f"  -> {nowcast_path}\n")
 # IFS forcings (took >15h to download like this)
 # Problems with data: no mean sea level pressure, pixelated (interp to land areas?), 
 # shortwave radiation dark areas -> time snapshot not daily mean?
-forcings_path = os.path.join(args.out_dir, "ifs_forcings.zarr")
-ds_forcings = ifs_forcings()
-print(ds_forcings, flush=True)
-# Drop conflicting fill/missing attrs and encoding so zarr can encode
-for v in list(ds_forcings.data_vars) + list(ds_forcings.coords):
-    a = ds_forcings[v].attrs
-    if "_FillValue" in a and "missing_value" in a:
-        del a["missing_value"]
-    enc = getattr(ds_forcings[v], "encoding", None)
-    if isinstance(enc, dict) and "missing_value" in enc:
-        del enc["missing_value"]
-# Also clean encoding on underlying Variables (used by encoder)
-for name in ds_forcings.variables:
-    var = ds_forcings.variables[name]
-    if hasattr(var, "encoding") and isinstance(var.encoding, dict) and "missing_value" in var.encoding:
-        del var.encoding["missing_value"]
-print(f"Writing {forcings_path} ...", flush=True)
-with ProgressBar():
-    ds_forcings.to_zarr(forcings_path, mode="w")
-zarr.consolidate_metadata(forcings_path)
-print(f"  -> {forcings_path}\n")
+# forcings_path = os.path.join(args.out_dir, "ifs_forcings.zarr")
+# ds_forcings = ifs_forcings()
+# print(ds_forcings, flush=True)
+# # Drop conflicting fill/missing attrs and encoding so zarr can encode
+# for v in list(ds_forcings.data_vars) + list(ds_forcings.coords):
+#     a = ds_forcings[v].attrs
+#     if "_FillValue" in a and "missing_value" in a:
+#         del a["missing_value"]
+#     enc = getattr(ds_forcings[v], "encoding", None)
+#     if isinstance(enc, dict) and "missing_value" in enc:
+#         del enc["missing_value"]
+# # Also clean encoding on underlying Variables (used by encoder)
+# for name in ds_forcings.variables:
+#     var = ds_forcings.variables[name]
+#     if hasattr(var, "encoding") and isinstance(var.encoding, dict) and "missing_value" in var.encoding:
+#         del var.encoding["missing_value"]
+# print(f"Writing {forcings_path} ...", flush=True)
+# with ProgressBar():
+#     ds_forcings.to_zarr(forcings_path, mode="w")
+# zarr.consolidate_metadata(forcings_path)
+# print(f"  -> {forcings_path}\n")

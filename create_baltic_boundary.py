@@ -10,8 +10,9 @@ import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
+import dask
+from dask.diagnostics import ProgressBar
 
-BASE_DIR = "/monolith/global_data/ml_datasets/baltic_sea/data/prep"
 
 MIN_LON, MAX_LON = 5.0, 9.0
 MIN_LAT, MAX_LAT = 55.0, 60.0
@@ -30,10 +31,11 @@ src_crs = ccrs.PlateCarree()
 def main():
     global lambert_proj
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base-dir", type=str, default=BASE_DIR, help="Base directory")
+    parser.add_argument("--base-dir", type=str, default="data", help="Base directory")
     parser.add_argument("--data", type=str, default="global_data.zarr", help="Global data zarr name")
     parser.add_argument("--static", type=str, default="global_static.zarr", help="Global static zarr name")
     parser.add_argument("--dist-threshold-km", type=float, default=150.0, help="Distance (km) for boundary mask")
+    parser.add_argument("--num-workers", type=int, default=20, help="Number of workers for dask (default: %(default)s)")
     args = parser.parse_args()
     base = args.base_dir
     os.makedirs(base, exist_ok=True)
@@ -84,7 +86,9 @@ def main():
 
     chunk_map = {dim: size for dim, size in ds_data.sizes.items()}
     ds_data = ds_data.chunk(chunk_map)
-    ds_data.to_zarr(os.path.join(base, "baltic_boundary_data.zarr"), mode="w")
+    with dask.config.set(scheduler="threads", num_workers=args.num_workers):
+            with ProgressBar():
+                ds_data.to_zarr(os.path.join(base, "baltic_boundary_data.zarr"), mode="w")
     print("Saved baltic_boundary_data.zarr")
 
     if "depth" in ds_data.dims:

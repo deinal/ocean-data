@@ -22,7 +22,7 @@ parser.add_argument(
 parser.add_argument(
     "--end",
     "-e",
-    default="2024-12-31",
+    default="2025-01-31",
     help="End date in YYYY-MM-DD format",
 )
 args = parser.parse_args()

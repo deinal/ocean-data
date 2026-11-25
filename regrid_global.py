@@ -86,7 +86,7 @@ def main():
     data_path = os.path.join(base, "global_data.zarr")
     print("Loading global_data.zarr and filling interior NaNs ...")
     ds_data = xr.open_zarr(data_path)
-    ds_data = xr.where(ds_data.isnull() & mask_ds, 0.0, ds_data)
+    ds_data = ds_data.fillna(0.0).where(mask_ds)
     for lat_arr, lon_arr, suffix in grids:
         print(f"Regridding global_data -> {suffix}° ...")
         ds_r = ds_data.interp(latitude=lat_arr, longitude=lon_arr)
