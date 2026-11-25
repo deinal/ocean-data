@@ -55,24 +55,46 @@ python regrid_ifs.py                          # ifs_analysis_forecasts.zarr
 ```
 `regrid_ifs.py` has hardcoded `OUT_PATH`/`MASK_PATH`. Swap the commented lines to produce `ifs_forecasts.zarr` on `global_mask_1_4.zarr`.
 
-## Fetch Baltic data
+## Baltic data
+
+### 1. Reanalysis (BAL MY, 1993–2024)
 
 ```
-python fetch_baltic_static.py
-python fetch_baltic_data.py --start-year 2022 --end-year 2023
+python fetch_baltic_static.py                 # baltic_static.zarr, baltic_mask.zarr
+python fetch_baltic_data.py --start 1993-01-01 --end 2024-12-31   # baltic_data.zarr
 ```
 
-```
-python fetch_boundary_static.py
-python fetch_boundary_data.py --start-year 2022 --end-year 2023
+### 2. Operational analysis (BAL ANFC, 2023-01 onwards)
 
-For ERA5 static is loaded after data
+`baltic_oper_mask.zarr` exists already.
 ```
-python fetch_era5_data.py --start-year 2022 --end-year 2023
-python fetch_era5_static.py
+python fetch_baltic_oper_data.py --start 2023-01-01 --end 2026-04-20   # baltic_oper_data.zarr
 ```
 
-Daily cronjob
+### 3. Forecast ground truth and IFS forcing (2024 weekly inits)
+
+Needs `ifs2024_daily_means.zarr` from the global IFS step.
+```
+python process_baltic_forecasts.py            # baltic_forecasts.zarr, baltic_ifs_forecasts.zarr
+```
+
+ERA5 forcing (`baltic_era5.zarr`) comes from `regrid_era5.py`, see Global data step 4.
+
+### 4. Boundary (North Sea strip, 5–9°E, 55–60°N)
+
+Cropped from the global GLORYS data, so run Global data step 1 first.
+```
+python create_baltic_boundary.py --num-workers 100   # baltic_boundary_{data,static,mask}.zarr
+```
+
+Boundary forecasts: lead -1 day from `global_analysis_mondays_2024.zarr`, lead 0 from `glo12_nowcasts.zarr`, leads 1–10 days from the GLO12 forecasts.
+```
+python fetch_glo12_forecasts.py               # glo12_forecasts.zarr
+python process_baltic_boundary.py             # baltic_boundary_forecasts.zarr
+```
+
+### 5. Daily cronjob to fetch Baltic forecasts
+
 ```
 0 17 * * * /appl/soft/geo/geoconda/3.10.9_20231117/bin/python /scratch/project_2004522/dholmber/ocean-data/fetch_weather_states.py >> /scratch/project_2004522/dholmber/ocean-data/weather.log 2>&1
 
