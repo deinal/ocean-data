@@ -142,7 +142,7 @@ from huggingface_hub import snapshot_download
 snapshot_download(
     repo_id="deinal/njord-baltic-data",
     repo_type="dataset",
-    local_dir="data"
+    local_dir="njord_baltic_data"
 )
 ```
 
